@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Callback</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.774.0.min.js"></script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+  </head>
+  <body>
+    <div style="margin: 0px auto">
+      <button
+        id="btn1"
+        style="height: 40px; background-color: blue; color: white; width: 100px"
+      >
+        Send Data
+      </button>
+    </div>
+  </body>
+  <script>
+    let token;
+    let auth0Client;
+    const cognitoDomain = "Domain_Name";
+    const clientId = "Client_Id";
+    const redirectUri = "http://localhost:8000";
+    const fetchAuthConfig = () => fetch("/auth0.json");
+    const configureClient = async () => {
+      const response = await fetchAuthConfig();
+      const config = await response.json();
+
+      auth0Client = await auth0.createAuth0Client({
+        domain: config.domain,
+        clientId: config.clientId,
+        authorizationParams: {
+          redirect_uri: window.location.origin,
+        },
+      });
+    };
+    async function login() {
+      await configureClient();
+      await auth0Client.loginWithRedirect({});
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("code")) {
+      login();
+    } else {
+      document.getElementById("btn1").addEventListener("click", accessKinesis);
+    }
+
+    async function getAWSCredentials(idToken) {
+      AWS.config.region = "ap-south-1"; // e.g., us-east-1
+
+      AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+        IdentityPoolId: "Identity-Pool-Id",
+        Logins: {
+          [Domain_Name]: idToken,
+        },
+      });
+
+      await AWS.config.credentials.getPromise();
+      return AWS.config.credentials;
+    }
+
+    async function accessKinesis() {
+      await configureClient();
+      await auth0Client.handleRedirectCallback();
+      const idToken = await auth0Client.getIdTokenClaims();
+      const code = params.get("code");
+      if (!code) {
+        console.error("Authorization code not found");
+        return;
+      }
+
+      try {
+        const credentials = await getAWSCredentials(idToken.__raw);
+        console.log("AWS Credentials:", credentials);
+
+        const kinesis = new AWS.Kinesis();
+        const jsonString = JSON.stringify({ event: "linkClicked" });
+        const kinesisParams = {
+          Data: jsonString,
+          PartitionKey: "key1",
+          StreamName: "DemoKinesis",
+        };
+
+        kinesis.putRecord(kinesisParams, (err, data) => {
+          if (err) console.error(err, err.stack);
+          else console.log(data);
+        });
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+  </script>
+</html>
