@@ -64,11 +64,6 @@
       await configureClient();
       await auth0Client.handleRedirectCallback();
       const idToken = await auth0Client.getIdTokenClaims();
-      const code = params.get("code");
-      if (!code) {
-        console.error("Authorization code not found");
-        return;
-      }
 
       try {
         const credentials = await getAWSCredentials(idToken.__raw);
@@ -84,7 +79,7 @@
 
         kinesis.putRecord(kinesisParams, (err, data) => {
           if (err) console.error(err, err.stack);
-          else console.log(data);
+          else alert("Successfully put record in  kinesis");
         });
       } catch (error) {
         console.error("Error:", error);
